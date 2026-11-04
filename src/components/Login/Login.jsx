@@ -41,7 +41,7 @@ const Login = () => {
     <div className="login-wrapper">
       <div className="login-card">
         <div className="text-center mb-4 text-white">
-          <span className="brand-mark mx-auto mb-3" style={{ background: '#fff', color: '#0a4d3a' }}>
+          <span className="brand-mark mx-auto mb-3" style={{ width: 44, height: 44, fontSize: '1.25rem' }}>
             <i className="bi bi-box-seam"></i>
           </span>
           <h3 className="fw-bold mb-1">Iniciar sesión</h3>

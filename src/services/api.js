@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+// En desarrollo las peticiones a /api pasan por el proxy de Vite (vite.config.js),
+// así la app funciona también desde un túnel (ngrok). En producción se define VITE_API_URL.
 const api = axios.create({
-  baseURL: 'http://localhost:3006'
+  baseURL: import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:3006')
 });
 
 // --- Sesión (Guía #11) ---

@@ -1,31 +1,41 @@
 import { useState, useEffect } from "react";
-import api from "../../services/api";
+import api, { authHeaders, mensajeError, obtenerUsuario } from "../../services/api";
+import { soles, estadoStock } from "../../utils/formato";
 
-const formVacio = { id: null, nombre: "", descripcion: "", precio: "", stock: "" };
-
-const soles = (n) =>
-  `S/ ${Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const estadoStock = (stock) => {
-  const s = Number(stock);
-  if (s === 0) return { clase: "out", texto: "Agotado" };
-  if (s <= 5) return { clase: "low", texto: "Stock bajo" };
-  return { clase: "ok", texto: "Disponible" };
-};
+const formVacio = { id: null, nombre: "", descripcion: "", precio: "", stock: "", categoria_id: "" };
 
 const CrudProductos = () => {
   const [productos, setProductos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [form, setForm] = useState(formVacio);
   const [busqueda, setBusqueda] = useState("");
-
-  useEffect(() => {
-    obtenerProductos();
-  }, []);
+  const [mensaje, setMensaje] = useState({ tipo: "", texto: "" });
+  const esAdmin = obtenerUsuario()?.rol === "Administrador";
 
   const obtenerProductos = async () => {
-    const response = await api.get("/productos");
-    setProductos(response.data);
+    try {
+      const response = await api.get("/api/productos", authHeaders());
+      setProductos(response.data);
+    } catch (error) {
+      setMensaje({ tipo: "danger", texto: mensajeError(error) });
+    }
   };
+
+  // Carga inicial de productos y categorías (el select se llena con las categorías existentes)
+  useEffect(() => {
+    let activo = true;
+    api
+      .get("/api/productos", authHeaders())
+      .then((response) => activo && setProductos(response.data))
+      .catch((error) => activo && setMensaje({ tipo: "danger", texto: mensajeError(error) }));
+    api
+      .get("/api/categorias", authHeaders())
+      .then((response) => activo && setCategorias(response.data))
+      .catch((error) => activo && setMensaje({ tipo: "danger", texto: mensajeError(error) }));
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -33,51 +43,84 @@ const CrudProductos = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.id) {
-      await api.put(`/productos/${form.id}`, form);
-    } else {
-      await api.post("/productos", form);
+    setMensaje({ tipo: "", texto: "" });
+    try {
+      const datos = {
+        nombre: form.nombre,
+        descripcion: form.descripcion,
+        precio: form.precio,
+        categoria_id: form.categoria_id,
+      };
+      if (form.id) {
+        // Al editar no se envía el stock: se modifica desde el Kardex
+        await api.put(`/api/productos/${form.id}`, datos, authHeaders());
+        setMensaje({ tipo: "success", texto: "Producto actualizado correctamente." });
+      } else {
+        await api.post("/api/productos", { ...datos, stock: form.stock || 0 }, authHeaders());
+        setMensaje({ tipo: "success", texto: "Producto guardado correctamente." });
+      }
+      setForm(formVacio);
+      obtenerProductos();
+    } catch (error) {
+      setMensaje({ tipo: "danger", texto: mensajeError(error) });
     }
-    setForm(formVacio);
-    obtenerProductos();
   };
 
   const handleEdit = (producto) => {
-    setForm(producto);
+    setMensaje({ tipo: "", texto: "" });
+    setForm({
+      id: producto.id,
+      nombre: producto.nombre,
+      descripcion: producto.descripcion || "",
+      precio: producto.precio,
+      stock: producto.stock,
+      categoria_id: producto.categoria_id,
+    });
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("¿Seguro que deseas eliminar este producto?")) {
-      await api.delete(`/productos/${id}`);
+    if (!window.confirm("¿Seguro que deseas eliminar este producto?")) return;
+    try {
+      await api.delete(`/api/productos/${id}`, authHeaders());
+      setMensaje({ tipo: "success", texto: "Producto eliminado." });
       obtenerProductos();
+    } catch (error) {
+      setMensaje({ tipo: "danger", texto: mensajeError(error) });
     }
   };
 
   const filtrados = productos.filter((p) =>
-    `${p.nombre} ${p.descripcion || ""}`.toLowerCase().includes(busqueda.toLowerCase())
+    `${p.nombre} ${p.descripcion || ""} ${p.categoria?.nombre || ""}`
+      .toLowerCase()
+      .includes(busqueda.toLowerCase())
   );
   const valorTotal = productos.reduce((t, p) => t + Number(p.precio) * Number(p.stock), 0);
   const unidades = productos.reduce((t, p) => t + Number(p.stock), 0);
   const stockBajo = productos.filter((p) => Number(p.stock) <= 5).length;
+  const sinCategorias = categorias.length === 0;
 
   return (
     <>
       <div className="topbar">
         <div>
           <h1>Gestión de Productos</h1>
-          <p>Administra tu inventario en tiempo real</p>
+          <p>Administra tu catálogo. El stock se ajusta desde el Kardex.</p>
         </div>
         <div className="d-flex align-items-center gap-3">
           <div className="search">
             <i className="bi bi-search"></i>
             <input
-              placeholder="Buscar producto..."
+              placeholder="Buscar producto o categoría..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
           </div>
         </div>
       </div>
+
+      {mensaje.texto && (
+        <div className={`alert alert-${mensaje.tipo} py-2`}>{mensaje.texto}</div>
+      )}
 
       <div className="row g-4 mb-4">
         <div className="col-lg-6">
@@ -113,6 +156,13 @@ const CrudProductos = () => {
                 <p className="panel-sub">{form.id ? `Editando #${form.id}` : "Completa los datos"}</p>
               </div>
             </div>
+
+            {sinCategorias && (
+              <div className="alert alert-warning py-2 small">
+                Primero registra una categoría en la sección <strong>Categorías</strong>.
+              </div>
+            )}
+
             <div className="mb-3">
               <label className="form-label">Nombre</label>
               <input
@@ -124,6 +174,22 @@ const CrudProductos = () => {
                 onChange={handleChange}
                 required
               />
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Categoría</label>
+              <select
+                name="categoria_id"
+                className="form-control"
+                value={form.categoria_id}
+                onChange={handleChange}
+                required
+                disabled={sinCategorias}
+              >
+                <option value="">Selecciona una categoría...</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
             </div>
             <div className="mb-3">
               <label className="form-label">Descripción</label>
@@ -144,6 +210,7 @@ const CrudProductos = () => {
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     name="precio"
                     className="form-control"
                     placeholder="0.00"
@@ -154,19 +221,26 @@ const CrudProductos = () => {
                 </div>
               </div>
               <div className="col-6 mb-3">
-                <label className="form-label">Stock</label>
+                <label className="form-label">Stock inicial</label>
                 <input
                   type="number"
+                  min="0"
                   name="stock"
                   className="form-control"
                   placeholder="0"
                   value={form.stock}
                   onChange={handleChange}
-                  required
+                  disabled={!!form.id}
+                  title={form.id ? "El stock se modifica desde Kardex / Movimientos" : ""}
                 />
               </div>
             </div>
-            <button type="submit" className="btn-main">
+            {form.id && (
+              <p className="small text-muted mb-2">
+                El stock actual es {form.stock}. Para cambiarlo registra un movimiento en Kardex.
+              </p>
+            )}
+            <button type="submit" className="btn-main" disabled={sinCategorias}>
               <i className={`bi ${form.id ? "bi-check2-circle" : "bi-plus-lg"} me-2`}></i>
               {form.id ? "Actualizar" : "Guardar"}
             </button>
@@ -191,6 +265,7 @@ const CrudProductos = () => {
                 <thead>
                   <tr>
                     <th>Producto</th>
+                    <th>Categoría</th>
                     <th>Precio</th>
                     <th>Stock</th>
                     <th>Estado</th>
@@ -211,6 +286,7 @@ const CrudProductos = () => {
                             </div>
                           </div>
                         </td>
+                        <td>{prod.categoria?.nombre || "-"}</td>
                         <td className="fw-bold">{soles(prod.precio)}</td>
                         <td>{prod.stock}</td>
                         <td><span className={`pill ${estado.clase}`}>{estado.texto}</span></td>
@@ -218,16 +294,18 @@ const CrudProductos = () => {
                           <button className="icon-btn me-2" title="Editar" onClick={() => handleEdit(prod)}>
                             <i className="bi bi-pencil"></i>
                           </button>
-                          <button className="icon-btn danger" title="Eliminar" onClick={() => handleDelete(prod.id)}>
-                            <i className="bi bi-trash3"></i>
-                          </button>
+                          {esAdmin && (
+                            <button className="icon-btn danger" title="Eliminar" onClick={() => handleDelete(prod.id)}>
+                              <i className="bi bi-trash3"></i>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
                   {filtrados.length === 0 && (
                     <tr>
-                      <td colSpan="5" className="empty">
+                      <td colSpan="6" className="empty">
                         <i className="bi bi-inbox fs-3 d-block mb-2"></i>
                         No hay productos para mostrar
                       </td>

@@ -1,27 +1,33 @@
 # appInventario
 
-Laboratorio #8 – Desarrollo de Frontend con React y consumo de API REST
 Fullstack Developer Software – Seminario IA 501 · SENATI
 Estudiante: Dorian David Giron Prato · Instructor: Giancarlos Barboza N.
 
-## Descripción
+Panel administrativo de inventario en React (Guías Prácticas #8 a #11). Consume la API REST de `miApi`.
 
-Interfaz en React para gestionar productos (CRUD completo: crear, listar, editar y eliminar). Consume la API REST de `miApi` (Node.js + Express + Sequelize + MySQL).
+## Funcionalidades
 
-Incluye buscador por nombre o descripción, tarjetas de resumen (valor del inventario, unidades y productos con stock bajo) y estado del stock por producto (Disponible, Stock bajo o Agotado).
+- **Login** con JWT. El token se guarda en `localStorage` y se envía en cada petición.
+- **Rutas protegidas**: sin sesión no se puede entrar a ninguna vista (redirige al login). Si el token expira, se cierra sesión automáticamente.
+- **Navegación** con React Router: Inicio (Dashboard), Productos, Categorías, Proveedores y Kardex / Movimientos.
+- **Dashboard**: tarjetas KPI (productos, categorías, proveedores, bajo stock), movimientos recientes y productos por categoría.
+- **Productos**: CRUD. La categoría se elige de un `<select>` alimentado por el endpoint de categorías; no se puede guardar sin categoría. El stock se modifica desde el Kardex.
+- **Categorías** y **Proveedores**: CRUD completo.
+- **Kardex**: registrar Entradas, Salidas y Ajustes. Cada movimiento actualiza el stock en el backend.
+- Eliminar elementos está reservado al rol `Administrador`.
 
 ## Tecnologías
 
-- React + Vite
+- React 19 + Vite
+- React Router (`react-router-dom`)
 - Axios
 - Bootstrap y Bootstrap Icons
-- Backend: Node.js, Express, Sequelize, MySQL
 
 ## Requisitos
 
 - Node.js 18 o superior
-- Backend `miApi` ejecutándose en el puerto 3006
-- Base de datos MySQL activa (`APIDB`, tabla `productos`)
+- Backend `miApi` en ejecución en el puerto 3006 (ver su README)
+- MySQL activo
 
 ## Instalación y ejecución
 
@@ -32,23 +38,39 @@ npm run dev
 
 Abrir http://localhost:5173
 
-El backend debe estar corriendo en otra terminal:
+En otra terminal, dentro de `miApi`:
 
 ```bash
-cd ../miApi
 npm run dev
 ```
 
-Debe mostrar: `Base de datos conectada y sincronizada.` y `Servidor corriendo en http://localhost:3006`.
+> Si Vite usa otro puerto (por ejemplo 5174), actualiza `CORS_ORIGIN` en el `.env` de `miApi`.
+
+## Primer uso
+
+1. Inicia el backend. El primer usuario que registres con `POST /api/auth/register` queda como `Administrador`.
+2. Inicia sesión en http://localhost:5173.
+3. Crea al menos una **Categoría**.
+4. Crea **Productos** asignándoles esa categoría.
+5. Registra **Movimientos** en el Kardex.
 
 ## Estructura
 
 ```
 appInventario/
 ├── src/
-│   ├── components/Productos/crudProductos.jsx   # Componente CRUD
-│   ├── services/api.js                          # Cliente Axios (baseURL: http://localhost:3006)
-│   ├── App.jsx                                  # Layout: sidebar + contenido
+│   ├── components/
+│   │   ├── Login/Login.jsx                      # Formulario de inicio de sesión (Guía #11)
+│   │   ├── ProtectedRoute/ProtectedRoute.jsx    # Guardián de rutas (Guía #11)
+│   │   ├── Layout/Layout.jsx                    # Menú lateral y cierre de sesión
+│   │   ├── Dashboard/Dashboard.jsx              # Inicio con indicadores KPI
+│   │   ├── Productos/crudProductos.jsx          # CRUD de productos (Guía #8)
+│   │   ├── Categorias/Categorias.jsx            # CRUD de categorías
+│   │   ├── Proveedores/Proveedores.jsx          # CRUD de proveedores
+│   │   └── Kardex/Kardex.jsx                    # Movimientos de inventario
+│   ├── services/api.js                          # Axios, cabeceras con token y manejo de 401
+│   ├── utils/formato.js                         # Formato de moneda, fechas y estado de stock
+│   ├── App.jsx                                  # Rutas públicas y privadas
 │   ├── main.jsx                                 # Punto de entrada (Bootstrap)
 │   └── index.css                                # Estilos
 └── package.json
@@ -56,34 +78,30 @@ appInventario/
 
 ## Endpoints consumidos
 
-| Método | Ruta              | Acción               |
-|--------|-------------------|----------------------|
-| GET    | `/productos`      | Listar productos     |
-| POST   | `/productos`      | Crear producto       |
-| PUT    | `/productos/:id`  | Actualizar producto  |
-| DELETE | `/productos/:id`  | Eliminar producto    |
+Todos requieren `Authorization: Bearer <token>`, salvo el login.
 
-Ejemplo de cuerpo para POST (Postman, `http://localhost:3006/productos`):
-
-```json
-{
-  "nombre": "Teclado Ergonómico",
-  "descripcion": "Teclado RGB con switches azules",
-  "precio": 150.00,
-  "stock": 15
-}
-```
+| Método | Ruta                    | Uso                                |
+|--------|-------------------------|------------------------------------|
+| POST   | `/api/auth/login`       | Iniciar sesión                     |
+| GET    | `/api/dashboard`        | Indicadores de Inicio              |
+| GET    | `/api/productos`        | Listar productos                   |
+| POST   | `/api/productos`        | Crear producto                     |
+| PUT    | `/api/productos/:id`    | Actualizar producto                |
+| DELETE | `/api/productos/:id`    | Eliminar producto (Administrador)  |
+| GET    | `/api/categorias`       | Listar categorías                  |
+| POST   | `/api/categorias`       | Crear categoría                    |
+| PUT    | `/api/categorias/:id`   | Actualizar categoría               |
+| DELETE | `/api/categorias/:id`   | Eliminar categoría (Administrador) |
+| GET    | `/api/proveedores`      | Listar proveedores                 |
+| POST   | `/api/proveedores`      | Crear proveedor                    |
+| PUT    | `/api/proveedores/:id`  | Actualizar proveedor               |
+| DELETE | `/api/proveedores/:id`  | Eliminar proveedor (Administrador) |
+| GET    | `/api/movimientos`      | Kardex                             |
+| POST   | `/api/movimientos`      | Registrar movimiento               |
 
 ## Cómo funciona
 
-- `api.js` centraliza la conexión al backend con Axios.
-- `crudProductos.jsx` maneja el estado de la lista y del formulario. Si el formulario tiene `id` hace `PUT`; si no, `POST`.
-- Después de cada operación se vuelve a consultar la lista con `GET`.
-- Valor del inventario = suma de (precio × stock) de cada producto.
-- Stock bajo = productos con 5 unidades o menos.
-
-## Pruebas realizadas
-
-- Navegador: crear, editar y eliminar productos desde la interfaz.
-- Postman: `POST /productos` con respuesta `200 OK`.
-- HeidiSQL: `SELECT * FROM productos;` muestra los datos guardados desde el navegador y desde Postman.
+- `services/api.js` centraliza Axios. `authHeaders()` agrega `Authorization: Bearer <token>` a cada petición. Si el backend responde `401`, se borra la sesión y se vuelve al login.
+- `ProtectedRoute` revisa si existe el token antes de mostrar una vista privada.
+- `crudProductos.jsx` usa `POST` si el formulario no tiene `id` y `PUT` si lo tiene. Tras cada operación vuelve a consultar la lista.
+- Valor del inventario = suma de (precio × stock). Stock bajo = 5 unidades o menos.

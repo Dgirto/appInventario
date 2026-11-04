@@ -1,29 +1,39 @@
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import Login from './components/Login/Login'
+import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'
+import Layout from './components/Layout/Layout'
+import Dashboard from './components/Dashboard/Dashboard'
 import CrudProductos from './components/Productos/crudProductos'
+import Categorias from './components/Categorias/Categorias'
+import Proveedores from './components/Proveedores/Proveedores'
+import Kardex from './components/Kardex/Kardex'
 
 function App() {
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark"><i className="bi bi-box-seam"></i></span>
-          Inventario
-        </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Ruta pública */}
+        <Route path="/" element={<Login />} />
 
-        <div className="nav-label">Menú</div>
-        <div className="nav-item active"><i className="bi bi-box"></i> Productos</div>
+        {/* Rutas privadas: solo usuarios logueados, con menú lateral común */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/productos" element={<CrudProductos />} />
+          <Route path="/categorias" element={<Categorias />} />
+          <Route path="/proveedores" element={<Proveedores />} />
+          <Route path="/kardex" element={<Kardex />} />
+        </Route>
 
-        <div className="sidebar-card">
-          <div className="fw-bold mb-1">SENATI</div>
-          <div style={{ opacity: .85 }}>React CRUD API Rest · Laboratorio #8</div>
-        </div>
-      </aside>
-
-      <main className="workspace">
-        <CrudProductos />
-      </main>
-    </div>
-  );
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
 }
 
 export default App

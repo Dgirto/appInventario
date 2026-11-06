@@ -1,11 +1,11 @@
-// Tema visual (oscuro / claro) guardado por navegador
+// Tema visual (claro / oscuro) guardado por navegador
 const CLAVE = 'tema';
 
 export const leerTema = () => {
   try {
-    return localStorage.getItem(CLAVE) === 'light' ? 'light' : 'dark';
+    return localStorage.getItem(CLAVE) === 'dark' ? 'dark' : 'light';
   } catch {
-    return 'dark';
+    return 'light';
   }
 };
 

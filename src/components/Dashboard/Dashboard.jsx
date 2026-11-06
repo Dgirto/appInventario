@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api, { authHeaders, mensajeError, obtenerUsuario } from "../../services/api";
 import { fechaHora, soles } from "../../utils/formato";
 
-const COLORES = ["#2dd4bf", "#f59e0b", "#818cf8", "#f472b6", "#38bdf8", "#a3e635"];
+const COLORES = ["#c8f031", "#0a0a0a", "#8d9a4b", "#a8a8a3", "#5c6b00", "#dfe7a8"];
 const ICONO_TIPO = {
   Entrada: { clase: "ok", icono: "bi-arrow-down-left" },
   Salida: { clase: "out", icono: "bi-arrow-up-right" },
@@ -27,6 +27,60 @@ const ultimos7Dias = (movimientos) => {
     else dia.salidas += Math.abs(m.cantidad);
   });
   return dias;
+};
+
+// Curva suave que pasa por cada punto
+const curva = (puntos) =>
+  puntos.reduce((ruta, [x, y], i) => {
+    if (i === 0) return `M${x} ${y}`;
+    const [px, py] = puntos[i - 1];
+    const medio = (px + x) / 2;
+    return `${ruta} C${medio} ${py} ${medio} ${y} ${x} ${y}`;
+  }, "");
+
+const AreaFlujo = ({ dias }) => {
+  const ancho = 720;
+  const alto = 230;
+  const base = 196;
+  const techo = 30;
+  const maximo = Math.max(1, ...dias.map((d) => Math.max(d.entradas, d.salidas)));
+  const x = (i) => 24 + (i * (ancho - 48)) / (dias.length - 1);
+  const y = (v) => base - (v / maximo) * (base - techo);
+  const entradas = dias.map((d, i) => [x(i), y(d.entradas)]);
+  const salidas = dias.map((d, i) => [x(i), y(d.salidas)]);
+  const pico = dias.reduce((m, d, i) => (d.entradas > dias[m].entradas ? i : m), 0);
+  const [px, py] = entradas[pico];
+  const tipX = Math.min(ancho - 112, Math.max(8, px - 52));
+  return (
+    <svg className="area" viewBox={`0 0 ${ancho} ${alto}`} role="img" aria-label="Entradas y salidas de los últimos 7 días">
+      <defs>
+        <linearGradient id="areaRelleno" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#c8f031" stopOpacity=".65" />
+          <stop offset="1" stopColor="#c8f031" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0, 1, 2, 3].map((n) => (
+        <line key={n} className="area-grid" x1="0" x2={ancho} y1={techo + (n * (base - techo)) / 3} y2={techo + (n * (base - techo)) / 3} />
+      ))}
+      <path d={`${curva(entradas)} L${x(dias.length - 1)} ${base} L${x(0)} ${base} Z`} fill="url(#areaRelleno)" />
+      <path className="area-out" d={curva(salidas)} />
+      <path className="area-in" d={curva(entradas)} />
+      {dias[pico].entradas > 0 && (
+        <>
+          <circle className="area-dot" cx={px} cy={py} r="6" />
+          <rect className="area-tip" x={tipX} y={Math.max(0, py - 40)} width="104" height="26" rx="13" />
+          <text className="area-tip-text" x={tipX + 52} y={Math.max(0, py - 40) + 18} textAnchor="middle">
+            +{dias[pico].entradas} unidades
+          </text>
+        </>
+      )}
+      {dias.map((d, i) => (
+        <text key={d.fecha.toISOString()} className="area-day" x={x(i)} y={alto - 6} textAnchor="middle">
+          {d.fecha.toLocaleDateString("es-PE", { weekday: "short" }).replace(".", "")}
+        </text>
+      ))}
+    </svg>
+  );
 };
 
 const Donut = ({ datos }) => {
@@ -92,7 +146,7 @@ const Dashboard = () => {
     <div className="topbar">
       <div>
         <div className="eyebrow mb-1">{hoy}</div>
-        <h1>Hola, {usuario?.nombre?.split(" ")[0] || "equipo"} 👋</h1>
+        <h1>Hola, {usuario?.nombre?.split(" ")[0] || "equipo"}</h1>
         <p>Así está tu inventario hoy.</p>
       </div>
     </div>
@@ -119,7 +173,6 @@ const Dashboard = () => {
   const { kpis, movimientosRecientes, productosPorCategoria, productos, movimientos } = datos;
   const valorInventario = productos.reduce((t, p) => t + Number(p.precio) * Number(p.stock), 0);
   const semana = ultimos7Dias(movimientos);
-  const maxSemana = Math.max(1, ...semana.map((d) => Math.max(d.entradas, d.salidas)));
   const entradasSemana = semana.reduce((t, d) => t + d.entradas, 0);
   const salidasSemana = semana.reduce((t, d) => t + d.salidas, 0);
   const criticos = productos
@@ -176,31 +229,11 @@ const Dashboard = () => {
                 <p className="panel-sub">Unidades que entraron y salieron en los últimos 7 días</p>
               </div>
               <div className="legend">
-                <span><i style={{ background: "var(--accent)" }}></i>Entradas</span>
-                <span><i style={{ background: "var(--accent-2)" }}></i>Salidas</span>
+                <span><i style={{ background: "var(--ink)" }}></i>Entradas</span>
+                <span><i style={{ background: "var(--muted)" }}></i>Salidas</span>
               </div>
             </div>
-            <div className="chart-bars">
-              {semana.map((d) => (
-                <div className="chart-col" key={d.fecha.toISOString()}>
-                  <div className="chart-pair">
-                    <div
-                      className="chart-bar in"
-                      style={{ height: `${(d.entradas / maxSemana) * 100}%` }}
-                      title={`Entradas: ${d.entradas}`}
-                    ></div>
-                    <div
-                      className="chart-bar out"
-                      style={{ height: `${(d.salidas / maxSemana) * 100}%` }}
-                      title={`Salidas: ${d.salidas}`}
-                    ></div>
-                  </div>
-                  <div className="chart-day">
-                    {d.fecha.toLocaleDateString("es-PE", { weekday: "short" }).replace(".", "")}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <AreaFlujo dias={semana} />
           </div>
         </div>
 
